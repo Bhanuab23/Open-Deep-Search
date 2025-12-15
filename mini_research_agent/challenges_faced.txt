@@ -1,0 +1,13 @@
+Short Note on Challenges and Scenarios:
+
+For this task, I created a Python script that takes a research topic, generates sub-questions using an LLM, retrieves short answers via Tavily, and summarizes the results.
+
+Challenges faced:
+1. Initially, I encountered authentication errors when trying to use OpenAI keys.
+2. Using OpenRouter, I received a 402 Payment Required error because I was attempting to use a paid model (gpt-4.1-mini).
+3. I had to choose a free OpenRouter model suitable for research tasks.
+
+Solutions and scenarios handled:
+- Switched to the free model meta-llama/llama-3.3-70b-instruct:free, which worked correctly for generating sub-questions and summaries.
+- Integrated Tavily search to retrieve short, relevant answers for each sub-question.
+- Tested the script with multiple research topics to ensure sub-questions, answers, and summaries were generated correctly.
