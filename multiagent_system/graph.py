@@ -1,9 +1,9 @@
 from typing import TypedDict, List, Dict
 from langgraph.graph import StateGraph, END
 
-from agents.planner_agent import planner_agent
-from agents.searcher_agent import searcher_agent
-from agents.writer_agent import writer_agent
+from multiagent_system.agents.planner_agent import planner_agent
+from multiagent_system.agents.searcher_agent import searcher_agent
+from multiagent_system.agents.writer_agent import writer_agent
 
 
 class ResearchState(TypedDict):

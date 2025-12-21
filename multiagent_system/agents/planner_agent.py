@@ -8,7 +8,7 @@ load_dotenv()
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-MODEL_ID = "meta-llama/llama-3.3-70b-instruct:free"
+MODEL_ID = "amazon/nova-lite-v1"
 
 
 def planner_agent(state: Dict) -> Dict:
