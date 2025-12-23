@@ -70,7 +70,7 @@ def looks_like_research_topic(text: str) -> bool:
 
     keywords = [
         "impact", "effect", "analysis", "study", "survey",
-        "review", "method", "approach", "framework"
+        "review", "method", "approach", "framework","summarize"
     ]
 
     # Single-word or short academic topics (e.g., NLP, AI, Blockchain)
@@ -85,7 +85,7 @@ def is_system_methodology_question(text: str) -> bool:
     t = text.lower()
     system_refs = ["you", "your", "this summary", "this response"]
     process_terms = [
-        "summarize", "summary", "generate", "generated",
+        "summarized", "summary", "generate", "generated",
         "approach", "method", "methodology", "process"
     ]
     return any(r in t for r in system_refs) and any(p in t for p in process_terms)
