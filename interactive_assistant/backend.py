@@ -5,6 +5,10 @@ from typing import Dict, Optional
 
 from multiagent_system.graph import build_graph
 
+from bs4 import BeautifulSoup
+from pdfminer.high_level import extract_text
+import tempfile
+
 SUMMARY_WORD_LIMITS = {
     "Short": "250-300 words",
     "Long": "600-800 words"
@@ -14,6 +18,37 @@ ANSWER_WORD_LIMITS = {
     "Short": "150-200 words",
     "Long": "300-500 words"
 }
+
+def fetch_url_content(url: str) -> str:
+    """
+    Fetches text content from a research paper URL.
+    Supports PDF and HTML pages.
+    """
+    url = url.strip() 
+    response = requests.get(url, timeout=30)
+    response.raise_for_status()
+
+    content_type = response.headers.get("Content-Type", "").lower()
+
+    # ---- PDF URL ----
+    if "application/pdf" in content_type or url.lower().endswith(".pdf"):
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+            tmp.write(response.content)
+            tmp_path = tmp.name
+
+        text = extract_text(tmp_path)
+        return text.strip()
+
+    # ---- HTML URL ----
+    soup = BeautifulSoup(response.text, "html.parser")
+
+    # Remove scripts/styles
+    for tag in soup(["script", "style", "noscript"]):
+        tag.decompose()
+
+    text = soup.get_text(separator=" ")
+    return " ".join(text.split())
+
 
 def research_summary_prompt(topic: str, summary_length: str) -> str:
     return f"""
@@ -215,13 +250,42 @@ Paper content:
         return summary
 
     # ----------------------------
-    # URL-based handling
+    # URL-based research paper summarization
     # ----------------------------
     if is_url(user_input):
-        return (
-            "📄 A research paper URL was detected. "
-            "Please upload the PDF version for accurate summarization."
-        )
+        try:
+            paper_text = fetch_url_content(user_input)
+
+            if not paper_text or len(paper_text.split()) < 500:
+                return (
+                    "⚠️ Unable to extract sufficient academic content from the URL. "
+                    "Please upload the PDF version for accurate summarization."
+                )
+
+            prompt = f"""
+Summarize the following research paper in a well-structured,
+clear, and concise academic manner.
+
+MANDATORY REQUIREMENTS:
+- Include a final section titled "References"
+- List only references present in the content
+- Do NOT invent citations
+- Maintain formal academic tone
+- Do NOT restrict to a single paragraph
+
+Summary length: {summary_length}
+
+Paper content:
+{paper_text}
+"""
+            summary = call_llm(prompt)
+            session["research_context"] = summary
+            session["source_type"] = "url"
+            return summary
+
+        except Exception as e:
+            return f"❌ Failed to process the URL: {str(e)}"
+
 
     # ----------------------------
     # Research Topic Summarization (HIGHEST PRIORITY TASK)
