@@ -1,13 +1,21 @@
 import re
 import os
 import requests
+import tempfile
 from typing import Dict, Optional
 
 from multiagent_system.graph import build_graph
 
 from bs4 import BeautifulSoup
 from pdfminer.high_level import extract_text
-import tempfile
+
+# ----------------------------
+# Configuration
+# ----------------------------
+
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+MODEL_ID = "amazon/nova-lite-v1"
 
 SUMMARY_WORD_LIMITS = {
     "Short": "250-300 words",
@@ -19,18 +27,23 @@ ANSWER_WORD_LIMITS = {
     "Long": "300-500 words"
 }
 
+# ----------------------------
+# URL Content Extraction
+# ----------------------------
+
 def fetch_url_content(url: str) -> str:
     """
     Fetches text content from a research paper URL.
-    Supports PDF and HTML pages.
+    Supports both PDF and HTML pages.
     """
-    url = url.strip() 
+    url = url.strip()
+
     response = requests.get(url, timeout=30)
     response.raise_for_status()
 
     content_type = response.headers.get("Content-Type", "").lower()
 
-    # ---- PDF URL ----
+    # ---- PDF ----
     if "application/pdf" in content_type or url.lower().endswith(".pdf"):
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
             tmp.write(response.content)
@@ -39,16 +52,19 @@ def fetch_url_content(url: str) -> str:
         text = extract_text(tmp_path)
         return text.strip()
 
-    # ---- HTML URL ----
+    # ---- HTML ----
     soup = BeautifulSoup(response.text, "html.parser")
 
-    # Remove scripts/styles
     for tag in soup(["script", "style", "noscript"]):
         tag.decompose()
 
     text = soup.get_text(separator=" ")
     return " ".join(text.split())
 
+
+# ----------------------------
+# Prompt Builders
+# ----------------------------
 
 def research_summary_prompt(topic: str, summary_length: str) -> str:
     return f"""
@@ -58,38 +74,55 @@ Write a {summary_length.lower()} academic research summary
 ({SUMMARY_WORD_LIMITS[summary_length]}) on the topic below.
 
 STRUCTURE REQUIREMENTS:
-- Summarize the research in a well-structured,
-  clear, and concise academic manner.
-- Each section may contain multiple paragraphs
-- DO NOT restrict the summary to a single paragraph
-- NO bullet points
-- NO casual explanations
+- Well-structured academic sections
+- Multiple paragraphs allowed
+- No bullet points
+- Formal academic tone
 
 CONTENT REQUIREMENTS:
 - Synthesize findings from multiple research papers
-- Maintain formal academic tone throughout
-- Do NOT fabricate statistics or claims
+- Do NOT fabricate claims or statistics
 
 REFERENCES (MANDATORY):
 - Include a final section titled "References"
-- Each reference MUST include a clickable URL
-- Use well-known academic or institutional sources only
-- If reliable references are unavailable, explicitly state:
-  "References not available"
+- Each reference must include a clickable URL
+- If unavailable, state "References not available"
 
 Research Topic:
 {topic}
 """
 
 
+def grounded_answer_prompt(context: str, question: str, summary_length: str) -> str:
+    return f"""
+Answer the question strictly using ONLY the research summary below.
 
-# ----------------------------
-# Config
-# ----------------------------
+REQUIREMENTS:
+- ONE paragraph only
+- Length: {ANSWER_WORD_LIMITS[summary_length]}
+- Academic tone
+- No headings or bullet points
+- No external knowledge
 
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
-OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-MODEL_ID = "amazon/nova-lite-v1"
+If the answer is not present, say:
+"Not explicitly mentioned in the provided research summary."
+
+Research Summary:
+{context}
+
+Question:
+{question}
+"""
+
+
+def system_methodology_prompt() -> str:
+    return """
+Explain, in one concise paragraph, the methodology used by this system
+to generate research summaries.
+
+Do not use bullet points or headings.
+Maintain a professional academic tone.
+"""
 
 
 # ----------------------------
@@ -105,29 +138,27 @@ def looks_like_research_topic(text: str) -> bool:
 
     keywords = [
         "impact", "effect", "analysis", "study", "survey",
-        "review", "method", "approach", "framework","summarize"
+        "review", "method", "approach", "framework", "summarize"
     ]
 
-    # Single-word or short academic topics (e.g., NLP, AI, Blockchain)
     if len(t.split()) <= 2 and t.isalpha():
         return True
 
     return any(k in t for k in keywords)
 
 
-
 def is_system_methodology_question(text: str) -> bool:
     t = text.lower()
     system_refs = ["you", "your", "this summary", "this response"]
     process_terms = [
-        "summarized", "summary", "generate", "generated",
-        "approach", "method", "methodology", "process"
+        "summary", "summarized", "generate",
+        "method", "methodology", "process"
     ]
     return any(r in t for r in system_refs) and any(p in t for p in process_terms)
 
 
 # ----------------------------
-# LLM Utilities
+# LLM Utility
 # ----------------------------
 
 def call_llm(prompt: str, temperature: float = 0.2) -> str:
@@ -147,38 +178,6 @@ def call_llm(prompt: str, temperature: float = 0.2) -> str:
     return response.json()["choices"][0]["message"]["content"]
 
 
-def grounded_answer(context: str, question: str, summary_length: str) -> str:
-    prompt = f"""
-Answer the question strictly using ONLY the research summary below.
-
-REQUIREMENTS:
-- ONE paragraph only
-- Length: {ANSWER_WORD_LIMITS[summary_length]}
-- Academic tone
-- No headings, bullet points, or lists
-- Do NOT introduce external knowledge
-- If the answer is not present, say:
-"Not explicitly mentioned in the provided research summary."
-
-Research Summary:
-{context}
-
-Question:
-{question}
-"""
-    return call_llm(prompt)
-
-
-def system_methodology_answer(summary_length: str) -> str:
-    prompt = f"""
-Explain, in one concise paragraph, the methodology used by this system
-to generate research summaries.
-
-Do not use bullet points or headings.
-Maintain a professional academic tone.
-"""
-    return call_llm(prompt)
-
 # ----------------------------
 # Core Router
 # ----------------------------
@@ -190,40 +189,44 @@ def route_user_input(
     mode: str = "Research Assistant"
 ) -> str:
     """
-    Routes user input based on strict precedence rules.
+    Routes user input using session-aware logic.
+    Each session corresponds to one chat.
     """
 
     summary_length = session.get("summary_length", "Short")
 
     # ----------------------------
-    # General Assistant (NO research pipeline)
+    # General Assistant
     # ----------------------------
     if mode == "General Assistant":
         prompt = f"""
-    Answer the following question in ONE paragraph.
+Answer the following question in ONE paragraph.
 
-    Length: {ANSWER_WORD_LIMITS[summary_length]}
-    Tone: Clear and factual
-    No headings, no bullet points, no citations.
+Length: {ANSWER_WORD_LIMITS[summary_length]}
+Tone: Clear and factual
+No headings, no bullet points, no citations.
 
-    Question:
-    {user_input}
-    """
+Question:
+{user_input}
+"""
         return call_llm(prompt, temperature=0.1)
 
-
     # ----------------------------
-    # System / methodology questions (highest priority)
+    # System / methodology question
     # ----------------------------
     if is_system_methodology_question(user_input):
-        return system_methodology_answer(summary_length)
+        return call_llm(system_methodology_prompt())
 
+    # ----------------------------
+    # Follow-up question (grounded)
+    # ----------------------------
     if session.get("research_context"):
-        return grounded_answer(
+        prompt = grounded_answer_prompt(
             session["research_context"],
             user_input,
             summary_length
-        )    
+        )
+        return call_llm(prompt)
 
     # ----------------------------
     # PDF-based summarization
@@ -236,7 +239,6 @@ clear, and concise academic manner.
 MANDATORY REQUIREMENTS:
 - Include a final section titled "References"
 - List only references present in the content
-- If no references are available, state "References not available"
 - Do NOT invent citations
 
 Summary length: {summary_length}
@@ -250,7 +252,7 @@ Paper content:
         return summary
 
     # ----------------------------
-    # URL-based research paper summarization
+    # URL-based summarization
     # ----------------------------
     if is_url(user_input):
         try:
@@ -270,8 +272,7 @@ MANDATORY REQUIREMENTS:
 - Include a final section titled "References"
 - List only references present in the content
 - Do NOT invent citations
-- Maintain formal academic tone
-- Do NOT restrict to a single paragraph
+- Formal academic tone
 
 Summary length: {summary_length}
 
@@ -286,23 +287,18 @@ Paper content:
         except Exception as e:
             return f"❌ Failed to process the URL: {str(e)}"
 
-
     # ----------------------------
-    # Research Topic Summarization (HIGHEST PRIORITY TASK)
+    # Research topic summarization
     # ----------------------------
     if looks_like_research_topic(user_input):
-        prompt = research_summary_prompt(
-            user_input,
-            summary_length
-        )
+        prompt = research_summary_prompt(user_input, summary_length)
         summary = call_llm(prompt)
         session["research_context"] = summary
         session["source_type"] = "topic"
         return summary
 
-
     # ----------------------------
-    # Fallback (should rarely happen)
+    # Fallback
     # ----------------------------
     prompt = f"""
 Answer the following question clearly and concisely in one paragraph.
