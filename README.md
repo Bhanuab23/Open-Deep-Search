@@ -81,19 +81,19 @@ User → Streamlit Interface → Backend Router → LangGraph Multi-Agent System
 Open-Deep-Search/
 │
 ├── interactive_assistant/
-│   ├── app.py              # Streamlit UI application
-│   └── backend.py          # Routing logic and LLM interaction
+│   ├── app.py              
+│   └── backend.py          
 │
 ├── multiagent_system/
-│   ├── graph.py            # LangGraph workflow definition
+│   ├── graph.py           
 │   └── agents/
-│       ├── planner_agent.py   # Decides task execution steps
-│       ├── searcher_agent.py  # Retrieves research data via Tavily
-│       └── writer_agent.py    # Generates structured summaries
+│       ├── planner_agent.py   
+│       ├── searcher_agent.py 
+│       └── writer_agent.py    
 │
-├── requirements.txt        # Project dependencies
-├── .env                    # API keys (not committed to GitHub)
-└── README.md               # Project documentation
+├── requirements.txt        
+├── .env                     
+└── README.md                
 ```
 
 ---
@@ -123,4 +123,93 @@ Activate the environment:
 venv\Scripts\activate
 ```
 
-**Linux / macOS
+**Linux / macOS**
+
+```bash
+source venv/bin/activate
+```
+
+---
+
+### 3️⃣ Install Dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+---
+
+## 🔑 Environment Variables
+
+Create a `.env` file in the project root directory and add your API keys:
+
+```
+OPENROUTER_API_KEY=your_openrouter_api_key
+TAVILY_API_KEY=your_tavily_api_key
+```
+
+These keys are required for the LLM and research retrieval functionality.
+
+---
+
+## ▶️ Running the Application
+
+Start the Streamlit application with the following command:
+
+```bash
+python -m streamlit run interactive_assistant/app.py
+```
+
+After running, open your browser and navigate to:
+
+```
+http://localhost:8501
+```
+
+---
+
+## 🔍 Example Workflow
+
+1. Enter a research topic such as:
+
+```
+Natural Language Processing
+```
+
+2. The system generates a structured academic summary.
+
+3. Upload a research paper PDF to receive a summarized version.
+
+4. Ask follow-up questions such as:
+
+```
+What are the main challenges mentioned in this research?
+```
+
+The system answers using only the previously generated research context.
+
+---
+
+## ⚠️ Challenges Faced
+
+- Controlling hallucinations in LLM outputs  
+- Maintaining research context for follow-up questions  
+- Designing multi-agent workflows using LangGraph  
+- Managing API keys and environment configuration  
+- Implementing multi-chat session memory in Streamlit
+
+---
+
+## 🚀 Future Improvements
+
+- Multi-paper comparison
+- Citation extraction
+- Semantic search for research papers
+- Cloud deployment
+- Research trend visualization
+
+---
+
+## 📜 License
+
+This project is developed for **educational and research purposes**.
