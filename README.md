@@ -73,5 +73,54 @@ User → Streamlit Interface → Backend Router → LangGraph Multi-Agent System
 
 ---
 
+---
+
 # 📂 Project Structure
-Open-Deep-Search/ │ ├── interactive_assistant/ │   ├── app.py │   ├── backend.py │ ├── multiagent_system/ │   ├── graph.py │   └── agents/ │       ├── planner_agent.py │       ├── searcher_agent.py │       └── writer_agent.py │ ├── requirements.txt └── README.md
+
+```
+Open-Deep-Search/
+│
+├── interactive_assistant/
+│   ├── app.py              # Streamlit UI application
+│   └── backend.py          # Routing logic and LLM interaction
+│
+├── multiagent_system/
+│   ├── graph.py            # LangGraph workflow definition
+│   └── agents/
+│       ├── planner_agent.py   # Decides task execution steps
+│       ├── searcher_agent.py  # Retrieves research data via Tavily
+│       └── writer_agent.py    # Generates structured summaries
+│
+├── requirements.txt        # Project dependencies
+├── .env                    # API keys (not committed to GitHub)
+└── README.md               # Project documentation
+```
+
+---
+
+## ⚙️ Installation
+
+### 1️⃣ Clone the Repository
+
+```bash
+git clone https://github.com/yourusername/Open-Deep-Search.git
+cd Open-Deep-Search
+```
+
+---
+
+### 2️⃣ Create a Virtual Environment
+
+```bash
+python -m venv venv
+```
+
+Activate the environment:
+
+**Windows**
+
+```bash
+venv\Scripts\activate
+```
+
+**Linux / macOS
